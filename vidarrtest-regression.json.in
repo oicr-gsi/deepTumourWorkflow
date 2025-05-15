@@ -1,0 +1,47 @@
+[
+    {
+        "arguments": {
+            "deepTumour.vcf_file": {
+                        "contents": {
+                            "configuration": "/.mounts/labs/gsiprojects/gsi/gsiusers/gpeng/workflow/deepTumour/test/GSICAPBENCH_1309_Lv_M_WG_NovaX_Validation_V1-2_100-PM-033_LCM4.mutect2.filtered.vep.vcf.gz",
+                            "externalIds": [
+                                {
+                                    "id": "TEST",
+                                    "provider": "TEST"
+                                }
+                            ]
+                        },
+                        "type": "EXTERNAL"
+            },
+            "deepTumour.outputFileNamePrefix": "GSICAPBENCH_1309_Lv_M_WG_NovaX_Validation_V1-2_100-PM-033_LCM4",
+            "deepTumour.reference": "hg38",
+            "deepTumour.runDeepTumour.modules": null,
+            "deepTumour.runDeepTumour.jobMemory": null,
+            "deepTumour.runDeepTumour.timeout": null
+        },
+        "description": "deepTumour workflow test",
+        "engineArguments": {
+           "write_to_cache": false,
+           "read_from_cache": false
+        },
+        "id": "deepTumour_test_with_GSICAPBENCH_1309_Lv_M_WG",
+        "metadata": {
+            "deepTumour.deepTumourOutputJson": {
+                "contents": [
+                    {
+                        "outputDirectory": "@SCRATCH@/@DATE@_Workflow_deepTumour_test_with_GSICAPBENCH_1309_Lv_M_WG_@JENKINSID@"
+                    }
+                ],
+                "type": "ALL"
+            }
+        },
+        "validators": [
+            {
+                "metrics_calculate": "@CHECKOUT@/tests/calculate.sh",
+                "metrics_compare": "@CHECKOUT@/tests/compare.sh",
+                "output_metrics": "/.mounts/labs/gsi/testdata/deepTumour/output_expectation/deepTumour_test_with_GSICAPBENCH_1309_Lv_M_WG.metrics",
+                "type": "script"
+            }
+        ]
+    }
+]
