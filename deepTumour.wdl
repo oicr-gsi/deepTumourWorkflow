@@ -29,7 +29,7 @@ workflow deepTumour {
         dependencies: [
             {
                 name: "deep-tumour/3.0.1",
-                url: "https://github.com/oicr-gsi/DeepTumour"
+                url: "https://github.com/LincolnSteinLab/DeepTumour"
             }
         ]
       output_meta: {
