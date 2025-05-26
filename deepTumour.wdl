@@ -61,7 +61,7 @@ task runDeepTumour {
         modules:   "Required environment modules"
         timeout:   "Hours before task timeout"    
     }
-    String liftover = if reference_genome == "hg38" then "hg38" else ""
+    String liftover = if reference_genome == "hg38" then "--hg38" else ""
 
 
     command <<<
@@ -69,7 +69,7 @@ task runDeepTumour {
         
         mkdir out
         source $DEEP_TUMOUR_ROOT/.venv/bin/activate
-        python $DEEP_TUMOUR_ROOT/src/DeepTumour.py --vcfFile ~{vcf} --reference $HG19_ROOT/hg19_random.fa --~{liftover} --outDir out
+        python $DEEP_TUMOUR_ROOT/src/DeepTumour.py --vcfFile ~{vcf} --reference $HG19_ROOT/hg19_random.fa ~{liftover} --outDir out
         mv out/predictions_DeepTumour.json ~{outputFileNamePrefix}.predictions_DeepTumour.json
 
     >>>
