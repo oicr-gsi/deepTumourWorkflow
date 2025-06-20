@@ -46,20 +46,19 @@ Output | Type | Description | Labels
 
 
 ## Commands
- This section lists command(s) run by WORKFLOW workflow
- 
- * Running WORKFLOW
- 
- === Description here ===.
- 
- <<<
-         set -euo pipefail
-         
-         mkdir out
-         python $DEEP_TUMOUR_ROOT/src/DeepTumour.py --vcfFile ~{vcf} --reference $HG19_ROOT/hg19_random.fa --~{liftover} --outDir out
-         mv out/predictions_DeepTumour.json ~{outputFileNamePrefix}.predictions_DeepTumour.json
- 
-     >>>
+This section lists command(s) run by deepTumour workflow
+
+* Running deepTumour
+
+```
+        set -euo pipefail
+        
+        mkdir out
+        python $DEEP_TUMOUR_ROOT/src/DeepTumour.py --vcfFile ~{vcf} --reference $HG19_ROOT/hg19_random.fa ~{liftover} --outDir out
+        mv out/predictions_DeepTumour.json ~{outputFileNamePrefix}.predictions_DeepTumour.json
+
+```
+
  ## Support
 
 For support, please file an issue on the [Github project](https://github.com/oicr-gsi) or send an email to gsi@oicr.on.ca .
