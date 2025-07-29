@@ -6,12 +6,14 @@ workflow deepTumour {
         File vcf_file
         String outputFileNamePrefix     
         String reference
+        Boolean filterVcf
     }
 
     parameter_meta {
         vcf_file: "The input vcf file"
         outputFileNamePrefix: "Prefix for output files"
         reference: "The genome reference build. For example: hg19, hg38"
+        filterVcf: "whether to filter input vcf for rows that has PASS value in FILTER column"
     }
     
     call runDeepTumour {
@@ -19,7 +21,8 @@ workflow deepTumour {
         vcf = vcf_file,
         outputFileNamePrefix = outputFileNamePrefix,
         reference_genome = reference,
-        modules = "deep-tumour/3.0.1 hg19/p13"
+        filterVcf = filterVcf,
+        modules = "deep-tumour/3.0.1 hg19/p13 bcftools/1.9"
     }
 
     meta {
@@ -49,6 +52,7 @@ task runDeepTumour {
         File vcf
         String outputFileNamePrefix
         String reference_genome
+        Boolean filterVcf
         Int jobMemory = 24
         String modules
         Int timeout = 24
@@ -57,6 +61,7 @@ task runDeepTumour {
         vcf:  "Input vcf file"
         outputFileNamePrefix: "Prefix for output file"
         reference_genome: "the reference genome fasta"
+        filterVcf: "whether to filter input vcf for rows that has PASS value in FILTER column"
         jobMemory: "Memory allocated indexing job"
         modules:   "Required environment modules"
         timeout:   "Hours before task timeout"    
@@ -67,9 +72,16 @@ task runDeepTumour {
     command <<<
         set -euo pipefail
         
+        if [ ~{filterVcf} = true ]; then
+            bcftools view -f PASS ~{vcf} -Oz -o filtered.vcf.gz
+        else
+            cp ~{vcf} filtered.vcf.gz
+        fi
+        
+
         mkdir out
         source $DEEP_TUMOUR_ROOT/.venv/bin/activate
-        python $DEEP_TUMOUR_ROOT/src/DeepTumour.py --vcfFile ~{vcf} --reference $HG19_ROOT/hg19_random.fa ~{liftover} --outDir out
+        python $DEEP_TUMOUR_ROOT/src/DeepTumour.py --vcfFile filtered.vcf.gz --reference $HG19_ROOT/hg19_random.fa ~{liftover} --outDir out
         mv out/predictions_DeepTumour.json ~{outputFileNamePrefix}.predictions_DeepTumour.json
 
     >>>
