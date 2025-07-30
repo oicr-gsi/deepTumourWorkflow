@@ -15,6 +15,7 @@
             },
             "deepTumour.outputFileNamePrefix": "GSICAPBENCH_1309_Lv_M_WG_NovaX_Validation_V1-2_100-PM-033_LCM4",
             "deepTumour.reference": "hg38",
+            "deepTumour.filterVcf": false,
             "deepTumour.runDeepTumour.modules": null,
             "deepTumour.runDeepTumour.jobMemory": null,
             "deepTumour.runDeepTumour.timeout": null
@@ -60,6 +61,7 @@
             },
             "deepTumour.outputFileNamePrefix": "TGL50_0003_Ct_T_WG",
             "deepTumour.reference": "hg19",
+            "deepTumour.filterVcf": true,
             "deepTumour.runDeepTumour.modules": null,
             "deepTumour.runDeepTumour.jobMemory": null,
             "deepTumour.runDeepTumour.timeout": null

@@ -5,6 +5,11 @@ This section lists command(s) run by deepTumour workflow
 
 ```
         set -euo pipefail
+        if [ ~{filterVcf} = true ]; then
+            bcftools view -f PASS ~{vcf} -Oz -o filtered.vcf.gz
+        else
+            cp ~{vcf} filtered.vcf.gz
+        fi
         
         mkdir out
         source $DEEP_TUMOUR_ROOT/.venv/bin/activate

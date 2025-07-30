@@ -24,7 +24,7 @@ Parameter|Value|Description
 `vcf_file`|File|The input vcf file
 `outputFileNamePrefix`|String|Prefix for output files
 `reference`|String|The genome reference build. For example: hg19, hg38
-
+`filterVcf`|String|whether to filter input vcf for rows that has PASS value in FILTER column
 
 #### Optional workflow parameters:
 Parameter|Value|Default|Description
@@ -52,6 +52,11 @@ This section lists command(s) run by deepTumour workflow
 
 ```
         set -euo pipefail
+        if [ ~{filterVcf} = true ]; then
+            bcftools view -f PASS ~{vcf} -Oz -o filtered.vcf.gz
+        else
+            cp ~{vcf} filtered.vcf.gz
+        fi
         
         mkdir out
         python $DEEP_TUMOUR_ROOT/src/DeepTumour.py --vcfFile ~{vcf} --reference $HG19_ROOT/hg19_random.fa ~{liftover} --outDir out
