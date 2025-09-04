@@ -22,7 +22,7 @@ workflow deepTumour {
         outputFileNamePrefix = outputFileNamePrefix,
         reference_genome = reference,
         filterVcf = filterVcf,
-        modules = "deep-tumour/3.0.1 hg19/p13 bcftools/1.9"
+        modules = "deep-tumour/3.0.3 hg19/p13 bcftools/1.9"
     }
 
     meta {
@@ -31,7 +31,7 @@ workflow deepTumour {
         description: "The DeepTumour algorithm predicts the tissue of origin of a tumour based on the pattern of passenger mutations identified by Whole Genome Sequencing (WGS)."
         dependencies: [
             {
-                name: "deep-tumour/3.0.1",
+                name: "deep-tumour/3.0.3",
                 url: "https://github.com/LincolnSteinLab/DeepTumour"
             }
         ]
@@ -71,7 +71,6 @@ task runDeepTumour {
 
     command <<<
         set -euo pipefail
-        
         if [ ~{filterVcf} = true ]; then
             bcftools view -f PASS ~{vcf} -Oz -o filtered.vcf.gz
         else

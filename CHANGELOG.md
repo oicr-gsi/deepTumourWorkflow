@@ -12,3 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.1] - 2025-07-29
 ### Added
 - Optional step of fitering the input vcf for rows that has PASS value in FILTER column
+
+## [1.0.2] - 2025-09-04
+### Changed
+- Changed to use DeepTumour 3.0.3, included bug fix in upstream
