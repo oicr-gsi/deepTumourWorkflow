@@ -3,25 +3,42 @@ version 1.0
 
 workflow deepTumour {
     input {
-        File vcf_file
+        File inputVcf
+        File inputVcfIndex
+        File inputMaf
         String outputFileNamePrefix     
         String reference
-        Boolean filterVcf
+        String filter_method
     }
 
     parameter_meta {
-        vcf_file: "The input vcf file"
+        inputVcf: "The input vcf file"
+        inputVcfIndex: "index of input vcf"
         outputFileNamePrefix: "Prefix for output files"
         reference: "The genome reference build. For example: hg19, hg38"
         filterVcf: "whether to filter input vcf for rows that has PASS value in FILTER column"
     }
+    if (filter_method == "maf") {
+        call filterMaf {
+            input:
+            maf_file = inputMaf,
+            vcf_file = inputVcf,
+            vcf_index = inputVcfIndex
+        }
+    }
+    if (filter_method == "vcf") {
+        call filterVcf {
+            input:
+            vcf_file = inputVcf
+        }
+    }
+    File filteredVcf = select_first([filterMaf.vcf_filtered, filterVcf.vcf_filtered])
     
     call runDeepTumour {
         input:
-        vcf = vcf_file,
+        vcf = filteredVcf,
         outputFileNamePrefix = outputFileNamePrefix,
         reference_genome = reference,
-        filterVcf = filterVcf,
         modules = "deep-tumour/3.0.3 hg19/p13 bcftools/1.9"
     }
 
@@ -47,40 +64,158 @@ workflow deepTumour {
     }
 }
 
+task filterMaf {
+    input {
+        File maf_file
+        File vcf_file
+        File vcf_index
+        Int t_depth = 1
+        Float t_vaf = 0.1
+        Float gnomad_af = 0.001
+        String modules = "pandas/2.1.3 bcftools/1.9"
+        Int jobMemory = 24
+        Int timeout = 2
+    }
+    parameter_meta {
+        maf_file:  "Input maf file"
+        vcf_file:  "Input vcf file"
+        vcf_index: "index of input vcf"
+        t_depth: "tumour depth filter threshold"
+        t_vaf: "Tumor Variant Allele Frequency threshold"
+        gnomad_af: "gnomAD allele frequency threshold"
+        jobMemory: "Memory allocated indexing job"
+        modules:   "Required environment modules"
+        timeout:   "Hours before task timeout"
+    }
+
+    command <<<
+        # --- Step 1: filter MAF with criteria ---
+        python3<<CODE
+        import pandas as pd
+        import os
+        
+        valid_exonic = {
+            "5'Flank","Frame_Shift_Del","Frame_Shift_Ins","In_Frame_Del","In_Frame_Ins",
+            "Missense_Mutation","Nonsense_Mutation","Nonstop_Mutation","Silent",
+            "Splice_Region","Splice_Site","Targeted_Region","Translation_Start_Site"
+        }
+        exclude_mutations = {"str_contraction", "t_lod_fstar"}
+
+        df = pd.read_csv("~{maf_file}", sep="\t", comment="#", low_memory=False)
+
+        def safe_float(x):
+            try: return float(x)
+            except: return None
+
+        df["gnomAD_AF"] = df["gnomAD_AF"].apply(safe_float)
+
+        filtered = df[
+            (df["gnomAD_AF"].notna()) &
+            (df["gnomAD_AF"] < ~{gnomad_af}) &
+            (df["Variant_Classification"].isin(valid_exonic)) &
+            (~df["Variant_Classification"].isin(exclude_mutations)) &
+            (df["t_depth"] > ~{t_depth}) &
+            (df["t_alt_count"] / df["t_depth"] > ~{t_vaf})
+        ]
+
+        bed_df = filtered[["Chromosome","Start_Position","End_Position"]].copy()
+        bed_df["Start_Position"] = bed_df["Start_Position"] - 1
+        
+        bed_path = os.path.join(os.getcwd(), "filter.bed")
+        bed_df.to_csv(bed_path, sep="\t", index=False, header=False)
+
+        CODE
+
+        # --- Step 2: apply BED filter to original VCF ---
+        # Extract tumour/normal names
+        grep "^##tumor_sample" ~{vcf_file} | cut -d '=' -f2 > samples.txt
+        grep "^##normal_sample" ~{vcf_file} | cut -d '=' -f2 >> samples.txt
+
+        # Subset VCF to variants in BED + reorder samples
+        bcftools view -f PASS -S samples.txt -R "$PWD/filter.bed" ~{vcf_file} -Oz -o filtered.vcf.gz
+
+    >>>
+    runtime {
+        memory: "~{jobMemory} GB"
+        modules: "~{modules}"
+        timeout: "~{timeout}"
+    }
+    output {
+        File vcf_filtered = "filtered.vcf.gz"
+    }
+}
+
+task filterVcf {
+    input {
+        File vcf_file
+        Int t_depth = 1
+        Float t_vaf = 0.01
+        String modules = "bcftools/1.9"
+        Int jobMemory = 8
+        Int timeout = 1
+    }
+    parameter_meta {
+        vcf_file:  "Input vcf file"
+        t_depth: "tumour depth filter threshold"
+        t_vaf: "Tumor Variant Allele Frequency threshold"
+        jobMemory: "Memory allocated indexing job"
+        modules:   "Required environment modules"
+        timeout:   "Hours before task timeout"
+    }
+
+    command <<<
+        set -euo pipefail
+
+        # extract tumour/normal names from header
+        grep "^##tumor_sample" ~{vcf_file} | cut -d '=' -f2 > samples.txt
+        grep "^##normal_sample" ~{vcf_file} | cut -d '=' -f2 >> samples.txt
+
+        # Filter chain:
+        #   1. Keep PASS only
+        #   2. Reorder samples to Normal, Tumour
+        #   3. Filter on tumour depth
+        #   4. Filter on tumour VAF
+        bcftools view -f PASS -S samples.txt ~{vcf_file} -Ou \
+          | bcftools filter -i "(FORMAT/DP[1]) >= ~{t_depth}" -Ou \
+          | bcftools filter -i "(FORMAT/AD[1:1])/(FORMAT/DP[1]) >= ~{t_vaf}" -Oz -o filtered.vcf.gz
+    >>>
+
+    runtime {
+        memory: "~{jobMemory} GB"
+        modules: "~{modules}"
+        timeout: "~{timeout}"
+    }
+
+    output {
+        File vcf_filtered = "filtered.vcf.gz"
+    }
+}
+
 task runDeepTumour {
     input {
         File vcf
         String outputFileNamePrefix
         String reference_genome
-        Boolean filterVcf
-        Int jobMemory = 24
+        Int jobMemory = 16
         String modules
-        Int timeout = 24
+        Int timeout = 4
     }
     parameter_meta {
         vcf:  "Input vcf file"
         outputFileNamePrefix: "Prefix for output file"
         reference_genome: "the reference genome fasta"
-        filterVcf: "whether to filter input vcf for rows that has PASS value in FILTER column"
         jobMemory: "Memory allocated indexing job"
         modules:   "Required environment modules"
         timeout:   "Hours before task timeout"    
     }
     String liftover = if reference_genome == "hg38" then "--hg38" else ""
 
-
     command <<<
         set -euo pipefail
-        if [ ~{filterVcf} = true ]; then
-            bcftools view -f PASS ~{vcf} -Oz -o filtered.vcf.gz
-        else
-            cp ~{vcf} filtered.vcf.gz
-        fi
-        
 
         mkdir out
         source $DEEP_TUMOUR_ROOT/.venv/bin/activate
-        python $DEEP_TUMOUR_ROOT/src/DeepTumour.py --vcfFile filtered.vcf.gz --reference $HG19_ROOT/hg19_random.fa ~{liftover} --outDir out
+        python $DEEP_TUMOUR_ROOT/src/DeepTumour.py --vcfFile ~{vcf} --reference $HG19_ROOT/hg19_random.fa ~{liftover} --outDir out --keep_input
         mv out/predictions_DeepTumour.json ~{outputFileNamePrefix}.predictions_DeepTumour.json
 
     >>>
