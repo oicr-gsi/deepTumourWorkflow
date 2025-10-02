@@ -5,10 +5,15 @@ workflow deepTumour {
     input {
         File inputVcf
         File inputVcfIndex
-        File inputMaf
+        File? inputMaf
         String outputFileNamePrefix     
         String reference
         String filter_method
+        Array[String]? valid_exonic 
+        Array[String]? exclude_mutations 
+        Int? t_depth = 1
+        Float? t_vaf = 0.01
+        Float? gnomad_af = 0.001
     }
 
     parameter_meta {
@@ -17,13 +22,23 @@ workflow deepTumour {
         outputFileNamePrefix: "Prefix for output files"
         reference: "The genome reference build. For example: hg19, hg38"
         filterVcf: "whether to filter input vcf for rows that has PASS value in FILTER column"
+        valid_exonic: "list of exonic variants to keep"
+        exclude_mutations: "list of exonic variants to exclude"
+        t_depth: "tumour depth filter threshold"
+        t_vaf: "Tumor Variant Allele Frequency threshold"
+        gnomad_af: "gnomAD allele frequency threshold"
     }
-    if (filter_method == "maf") {
+    if (filter_method == "maf" && defined(inputMaf)) {
         call filterMaf {
             input:
-            maf_file = inputMaf,
+            maf_file = select_first([inputMaf]),
             vcf_file = inputVcf,
-            vcf_index = inputVcfIndex
+            vcf_index = inputVcfIndex,
+            t_depth = t_depth,
+            t_vaf = t_vaf,
+            gnomad_af = gnomad_af,
+            valid_exonic = valid_exonic,
+            exclude_mutations = exclude_mutations
         }
     }
     if (filter_method == "vcf") {
@@ -39,7 +54,7 @@ workflow deepTumour {
         vcf = filteredVcf,
         outputFileNamePrefix = outputFileNamePrefix,
         reference_genome = reference,
-        modules = "deep-tumour/3.0.3 hg19/p13 bcftools/1.9"
+        modules = "deep-tumour/3.0.4 hg19/p13 bcftools/1.9"
     }
 
     meta {
@@ -48,7 +63,7 @@ workflow deepTumour {
         description: "The DeepTumour algorithm predicts the tissue of origin of a tumour based on the pattern of passenger mutations identified by Whole Genome Sequencing (WGS)."
         dependencies: [
             {
-                name: "deep-tumour/3.0.3",
+                name: "deep-tumour/3.0.4",
                 url: "https://github.com/LincolnSteinLab/DeepTumour"
             }
         ]
@@ -72,6 +87,10 @@ task filterMaf {
         Int t_depth = 1
         Float t_vaf = 0.1
         Float gnomad_af = 0.001
+        Array[String]? valid_exonic = ["5'Flank","Frame_Shift_Del","Frame_Shift_Ins","In_Frame_Del","In_Frame_Ins",
+            "Missense_Mutation","Nonsense_Mutation","Nonstop_Mutation","Silent",
+            "Splice_Region","Splice_Site","Targeted_Region","Translation_Start_Site"]
+        Array[String]? exclude_mutations = ["str_contraction", "t_lod_fstar"]
         String modules = "pandas/2.1.3 bcftools/1.9"
         Int jobMemory = 24
         Int timeout = 2
@@ -93,13 +112,6 @@ task filterMaf {
         python3<<CODE
         import pandas as pd
         import os
-        
-        valid_exonic = {
-            "5'Flank","Frame_Shift_Del","Frame_Shift_Ins","In_Frame_Del","In_Frame_Ins",
-            "Missense_Mutation","Nonsense_Mutation","Nonstop_Mutation","Silent",
-            "Splice_Region","Splice_Site","Targeted_Region","Translation_Start_Site"
-        }
-        exclude_mutations = {"str_contraction", "t_lod_fstar"}
 
         df = pd.read_csv("~{maf_file}", sep="\t", comment="#", low_memory=False)
 
@@ -108,18 +120,21 @@ task filterMaf {
             except: return None
 
         df["gnomAD_AF"] = df["gnomAD_AF"].apply(safe_float)
+        valid_exonic_list = "~{sep=',' valid_exonic}".split(",")
+        exclude_mutations_list = "~{sep=',' exclude_mutations}".split(",")
 
         filtered = df[
             (df["gnomAD_AF"].notna()) &
             (df["gnomAD_AF"] < ~{gnomad_af}) &
-            (df["Variant_Classification"].isin(valid_exonic)) &
-            (~df["Variant_Classification"].isin(exclude_mutations)) &
+            (df["Variant_Classification"].isin(valid_exonic_list)) &
+            (~df["Variant_Classification"].isin(exclude_mutations_list)) &
             (df["t_depth"] > ~{t_depth}) &
             (df["t_alt_count"] / df["t_depth"] > ~{t_vaf})
         ]
 
         bed_df = filtered[["Chromosome","Start_Position","End_Position"]].copy()
         bed_df["Start_Position"] = bed_df["Start_Position"] - 1
+
         
         bed_path = os.path.join(os.getcwd(), "filter.bed")
         bed_df.to_csv(bed_path, sep="\t", index=False, header=False)
@@ -167,8 +182,8 @@ task filterVcf {
         set -euo pipefail
 
         # extract tumour/normal names from header
-        grep "^##tumor_sample" ~{vcf_file} | cut -d '=' -f2 > samples.txt
-        grep "^##normal_sample" ~{vcf_file} | cut -d '=' -f2 >> samples.txt
+        zcat ~{vcf_file}|grep "^##tumor_sample"|cut -d '=' -f2 > samples.txt
+        zcat ~{vcf_file}|grep "^##normal_sample"|cut -d '=' -f2 >> samples.txt
 
         # Filter chain:
         #   1. Keep PASS only
