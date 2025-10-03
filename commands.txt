@@ -4,16 +4,70 @@ This section lists command(s) run by deepTumour workflow
 * Running deepTumour
 
 ```
-        set -euo pipefail
-        if [ ~{filterVcf} = true ]; then
-            bcftools view -f PASS ~{vcf} -Oz -o filtered.vcf.gz
-        else
-            cp ~{vcf} filtered.vcf.gz
-        fi
+        # --- Step 1: filter MAF with criteria ---
+        python3<<CODE
+        import pandas as pd
+        import os
+
+        df = pd.read_csv("~{maf_file}", sep="\t", comment="#", low_memory=False)
+
+        def safe_float(x):
+            try: return float(x)
+            except: return None
+
+        df["gnomAD_AF"] = df["gnomAD_AF"].apply(safe_float)
+        valid_exonic_list = "~{sep=',' valid_exonic}".split(",")
+        exclude_mutations_list = "~{sep=',' exclude_mutations}".split(",")
+
+        filtered = df[
+            (df["gnomAD_AF"].notna()) &
+            (df["gnomAD_AF"] < ~{gnomad_af}) &
+            (df["Variant_Classification"].isin(valid_exonic_list)) &
+            (~df["Variant_Classification"].isin(exclude_mutations_list)) &
+            (df["t_depth"] > ~{t_depth}) &
+            (df["t_alt_count"] / df["t_depth"] > ~{t_vaf})
+        ]
+
+        bed_df = filtered[["Chromosome","Start_Position","End_Position"]].copy()
+        bed_df["Start_Position"] = bed_df["Start_Position"] - 1
+
         
+        bed_path = os.path.join(os.getcwd(), "filter.bed")
+        bed_df.to_csv(bed_path, sep="\t", index=False, header=False)
+
+        CODE
+
+        # --- Step 2: apply BED filter to original VCF ---
+        # Extract tumour/normal names
+        grep "^##tumor_sample" ~{vcf_file} | cut -d '=' -f2 > samples.txt
+        grep "^##normal_sample" ~{vcf_file} | cut -d '=' -f2 >> samples.txt
+
+        # Subset VCF to variants in BED + reorder samples
+        bcftools view -f PASS -S samples.txt -R "$PWD/filter.bed" ~{vcf_file} -Oz -o filtered.vcf.gz
+
+```
+```
+        set -euo pipefail
+
+        # extract tumour/normal names from header
+        zcat ~{vcf_file}|grep "^##tumor_sample"|cut -d '=' -f2 > samples.txt
+        zcat ~{vcf_file}|grep "^##normal_sample"|cut -d '=' -f2 >> samples.txt
+
+        # Filter chain:
+        #   1. Keep PASS only
+        #   2. Reorder samples to Normal, Tumour
+        #   3. Filter on tumour depth
+        #   4. Filter on tumour VAF
+        bcftools view -f PASS -S samples.txt ~{vcf_file} -Ou \
+          | bcftools filter -i "(FORMAT/DP[1]) >= ~{t_depth}" -Ou \
+          | bcftools filter -i "(FORMAT/AD[1:1])/(FORMAT/DP[1]) >= ~{t_vaf}" -Oz -o filtered.vcf.gz
+```
+```
+        set -euo pipefail
+
         mkdir out
         source $DEEP_TUMOUR_ROOT/.venv/bin/activate
-        python $DEEP_TUMOUR_ROOT/src/DeepTumour.py --vcfFile ~{vcf} --reference $HG19_ROOT/hg19_random.fa ~{liftover} --outDir out
+        python $DEEP_TUMOUR_ROOT/src/DeepTumour.py --vcfFile ~{vcf} --reference $HG19_ROOT/hg19_random.fa ~{liftover} --outDir out --keep_input
         mv out/predictions_DeepTumour.json ~{outputFileNamePrefix}.predictions_DeepTumour.json
 
 ```

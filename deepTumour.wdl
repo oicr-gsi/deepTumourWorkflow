@@ -9,36 +9,22 @@ workflow deepTumour {
         String outputFileNamePrefix     
         String reference
         String filter_method
-        Array[String]? valid_exonic 
-        Array[String]? exclude_mutations 
-        Int? t_depth = 1
-        Float? t_vaf = 0.01
-        Float? gnomad_af = 0.001
     }
 
     parameter_meta {
         inputVcf: "The input vcf file"
         inputVcfIndex: "index of input vcf"
+        inputMaf: "the input maf file"
         outputFileNamePrefix: "Prefix for output files"
         reference: "The genome reference build. For example: hg19, hg38"
-        filterVcf: "whether to filter input vcf for rows that has PASS value in FILTER column"
-        valid_exonic: "list of exonic variants to keep"
-        exclude_mutations: "list of exonic variants to exclude"
-        t_depth: "tumour depth filter threshold"
-        t_vaf: "Tumor Variant Allele Frequency threshold"
-        gnomad_af: "gnomAD allele frequency threshold"
+        filter_method: "method to filter input vcf directly or filter using maf, value can only be either 'maf' or 'vcf'"
     }
     if (filter_method == "maf" && defined(inputMaf)) {
         call filterMaf {
             input:
             maf_file = select_first([inputMaf]),
             vcf_file = inputVcf,
-            vcf_index = inputVcfIndex,
-            t_depth = t_depth,
-            t_vaf = t_vaf,
-            gnomad_af = gnomad_af,
-            valid_exonic = valid_exonic,
-            exclude_mutations = exclude_mutations
+            vcf_index = inputVcfIndex
         }
     }
     if (filter_method == "vcf") {
@@ -85,12 +71,12 @@ task filterMaf {
         File vcf_file
         File vcf_index
         Int t_depth = 1
-        Float t_vaf = 0.1
+        Float t_vaf = 0.01
         Float gnomad_af = 0.001
-        Array[String]? valid_exonic = ["5'Flank","Frame_Shift_Del","Frame_Shift_Ins","In_Frame_Del","In_Frame_Ins",
+        Array[String] valid_exonic = ["5'Flank","Frame_Shift_Del","Frame_Shift_Ins","In_Frame_Del","In_Frame_Ins",
             "Missense_Mutation","Nonsense_Mutation","Nonstop_Mutation","Silent",
             "Splice_Region","Splice_Site","Targeted_Region","Translation_Start_Site"]
-        Array[String]? exclude_mutations = ["str_contraction", "t_lod_fstar"]
+        Array[String] exclude_mutations = ["str_contraction", "t_lod_fstar"]
         String modules = "pandas/2.1.3 bcftools/1.9"
         Int jobMemory = 24
         Int timeout = 2
@@ -102,9 +88,11 @@ task filterMaf {
         t_depth: "tumour depth filter threshold"
         t_vaf: "Tumor Variant Allele Frequency threshold"
         gnomad_af: "gnomAD allele frequency threshold"
+        valid_exonic: "list of exonic variants to keep"
+        exclude_mutations: "list of exonic variants to exclude"
         jobMemory: "Memory allocated indexing job"
         modules:   "Required environment modules"
-        timeout:   "Hours before task timeout"
+        timeout:   "Hours before task timeout"   
     }
 
     command <<<
