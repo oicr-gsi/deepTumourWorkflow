@@ -40,7 +40,7 @@ workflow deepTumour {
         vcf = filteredVcf,
         outputFileNamePrefix = outputFileNamePrefix,
         reference_genome = reference,
-        modules = "deep-tumour/3.0.4 hg19/p13 bcftools/1.9"
+        modules = "deep-tumour/3.0.5 hg19/p13 bcftools/1.9"
     }
 
     meta {
@@ -49,7 +49,7 @@ workflow deepTumour {
         description: "The DeepTumour algorithm predicts the tissue of origin of a tumour based on the pattern of passenger mutations identified by Whole Genome Sequencing (WGS)."
         dependencies: [
             {
-                name: "deep-tumour/3.0.4",
+                name: "deep-tumour/3.0.5",
                 url: "https://github.com/LincolnSteinLab/DeepTumour"
             }
         ]

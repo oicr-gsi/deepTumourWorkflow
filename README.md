@@ -6,7 +6,7 @@ The DeepTumour algorithm predicts the tissue of origin of a tumour based on the 
 
 ## Dependencies
 
-* [deep-tumour 3.0.4](https://github.com/LincolnSteinLab/DeepTumour)
+* [deep-tumour 3.0.5](https://github.com/LincolnSteinLab/DeepTumour)
 
 
 ## Usage
