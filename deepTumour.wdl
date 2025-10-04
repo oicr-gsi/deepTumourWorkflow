@@ -101,7 +101,7 @@ task filterMaf {
         import pandas as pd
         import os
 
-        df = pd.read_csv("~{maf_file}", sep="\t", comment="#", low_memory=False)
+        df = pd.read_csv("~{maf_file}", sep="\t", comment="#", low_memory=False, compression='infer')
 
         def safe_float(x):
             try: return float(x)
