@@ -27,7 +27,7 @@
             },
             "deepTumour.inputMaf": {
                         "contents": {
-                            "configuration": "/.mounts/labs/gsi/testdata/deepTumour/test_inputs/test2_mutect2.filtered.maf",
+                            "configuration": "/.mounts/labs/gsi/testdata/deepTumour/test_inputs/test2_mutect2.filtered.maf.gz",
                             "externalIds": [
                                 {
                                     "id": "TEST",
@@ -108,18 +108,7 @@
                         },
                         "type": "EXTERNAL"
             },
-            "deepTumour.inputMaf": {
-                        "contents": {
-                            "configuration": "/.mounts/labs/gsi/testdata/deepTumour/test_inputs/test2_mutect2.filtered.maf",
-                            "externalIds": [
-                                {
-                                    "id": "TEST",
-                                    "provider": "TEST"
-                                }
-                            ]
-                        },
-                        "type": "EXTERNAL"
-            },
+            "deepTumour.inputMaf": null,
             "deepTumour.outputFileNamePrefix": "Test_vcf",
             "deepTumour.reference": "hg38",
             "deepTumour.filter_method": "vcf",
