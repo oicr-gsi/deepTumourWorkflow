@@ -1,9 +1,9 @@
 [
     {
         "arguments": {
-            "deepTumour.vcf_file": {
+            "deepTumour.inputVcf": {
                         "contents": {
-                            "configuration": "/.mounts/labs/gsi/testdata/deepTumour/test_inputs/Test01.mutect2.filtered.vep.vcf.gz",
+                            "configuration": "/.mounts/labs/gsi/testdata/deepTumour/test_inputs/Test02.mutect2.filtered.vep.vcf.gz",
                             "externalIds": [
                                 {
                                     "id": "TEST",
@@ -13,19 +13,56 @@
                         },
                         "type": "EXTERNAL"
             },
-            "deepTumour.outputFileNamePrefix": "Test1",
+            "deepTumour.inputVcfIndex": {
+                        "contents": {
+                            "configuration": "/.mounts/labs/gsi/testdata/deepTumour/test_inputs/Test02.mutect2.filtered.vep.vcf.gz.tbi",
+                            "externalIds": [
+                                {
+                                    "id": "TEST",
+                                    "provider": "TEST"
+                                }
+                            ]
+                        },
+                        "type": "EXTERNAL"
+            },
+            "deepTumour.inputMaf": {
+                        "contents": {
+                            "configuration": "/.mounts/labs/gsi/testdata/deepTumour/test_inputs/test2_mutect2.filtered.maf.gz",
+                            "externalIds": [
+                                {
+                                    "id": "TEST",
+                                    "provider": "TEST"
+                                }
+                            ]
+                        },
+                        "type": "EXTERNAL"
+            },
+            "deepTumour.outputFileNamePrefix": "Test2",
             "deepTumour.reference": "hg38",
-            "deepTumour.filterVcf": false,
+            "deepTumour.filter_method": "maf",
+            "deepTumour.filterMaf.t_depth": null,
+            "deepTumour.filterMaf.t_vaf": null,
+            "deepTumour.filterMaf.gnomad_af": null,
+            "deepTumour.filterMaf.valid_exonic": null,
+            "deepTumour.filterMaf.exclude_mutations": null,
+            "deepTumour.filterMaf.modules": null,
+            "deepTumour.filterMaf.jobMemory": null,
+            "deepTumour.filterMaf.timeout": null,
+            "deepTumour.filterVcf.t_depth": null,
+            "deepTumour.filterVcf.t_vaf": null,
+            "deepTumour.filterVcf.modules": null,
+            "deepTumour.filterVcf.jobMemory": null,
+            "deepTumour.filterVcf.timeout": null,
             "deepTumour.runDeepTumour.modules": null,
             "deepTumour.runDeepTumour.jobMemory": null,
             "deepTumour.runDeepTumour.timeout": null
         },
-        "description": "deepTumour workflow test 1",
+        "description": "deepTumour workflow test filterMaf",
         "engineArguments": {
            "write_to_cache": false,
            "read_from_cache": false
         },
-        "id": "deepTumour_test_1",
+        "id": "deepTumour_test_filterMaf",
         "metadata": {
             "deepTumour.deepTumourOutputJson": {
                 "contents": [
@@ -47,9 +84,9 @@
     },
        {
         "arguments": {
-            "deepTumour.vcf_file": {
+            "deepTumour.inputVcf": {
                         "contents": {
-                            "configuration": "/.mounts/labs/gsi/testdata/deepTumour/test_inputs/Test02.mutect2.filtered.vcf.gz",
+                            "configuration": "/.mounts/labs/gsi/testdata/deepTumour/test_inputs/Test02.mutect2.filtered.vep.vcf.gz",
                             "externalIds": [
                                 {
                                     "id": "TEST",
@@ -59,19 +96,45 @@
                         },
                         "type": "EXTERNAL"
             },
-            "deepTumour.outputFileNamePrefix": "Test2",
-            "deepTumour.reference": "hg19",
-            "deepTumour.filterVcf": true,
+            "deepTumour.inputVcfIndex": {
+                        "contents": {
+                            "configuration": "/.mounts/labs/gsi/testdata/deepTumour/test_inputs/Test02.mutect2.filtered.vep.vcf.gz.tbi",
+                            "externalIds": [
+                                {
+                                    "id": "TEST",
+                                    "provider": "TEST"
+                                }
+                            ]
+                        },
+                        "type": "EXTERNAL"
+            },
+            "deepTumour.inputMaf": null,
+            "deepTumour.outputFileNamePrefix": "Test_vcf",
+            "deepTumour.reference": "hg38",
+            "deepTumour.filter_method": "vcf",
+            "deepTumour.filterMaf.t_depth": null,
+            "deepTumour.filterMaf.t_vaf": null,
+            "deepTumour.filterMaf.gnomad_af": null,
+            "deepTumour.filterMaf.valid_exonic": null,
+            "deepTumour.filterMaf.exclude_mutations": null,
+            "deepTumour.filterMaf.modules": null,
+            "deepTumour.filterMaf.jobMemory": null,
+            "deepTumour.filterMaf.timeout": null,
+            "deepTumour.filterVcf.t_depth": null,
+            "deepTumour.filterVcf.t_vaf": null,
+            "deepTumour.filterVcf.modules": null,
+            "deepTumour.filterVcf.jobMemory": null,
+            "deepTumour.filterVcf.timeout": null,
             "deepTumour.runDeepTumour.modules": null,
             "deepTumour.runDeepTumour.jobMemory": null,
             "deepTumour.runDeepTumour.timeout": null
         },
-        "description": "deepTumour workflow test 2",
+        "description": "deepTumour workflow test_vcf",
         "engineArguments": {
            "write_to_cache": false,
            "read_from_cache": false
         },
-        "id": "deepTumour_test_2",
+        "id": "deepTumour_test_vcf",
         "metadata": {
             "deepTumour.deepTumourOutputJson": {
                 "contents": [
@@ -91,5 +154,4 @@
             }
         ]
     }
-    
 ]
