@@ -60,81 +60,78 @@ Output | Type | Description | Labels
 ---|---|---|---
 `deepTumourOutputJson`|File|the output json assigns a match probability from 0.0 to 1.0 for each of the 29 tumour types on which it was trained and chooses the tumour type with the highest probability score. The algorithm also calculates a type of confidence score based on the probability scores' distributione. A low entropy (< 2.0) is considered a confident score. HIgher values are unreliable (but might be correct).|vidarr_label: deepTumourOutputJson
 
-
 ## Commands
- This section lists command(s) run by deepTumour workflow
- 
- * Running deepTumour
- 
- ```
-         # --- Step 1: filter MAF with criteria ---
-         python3<<CODE
-         import pandas as pd
-         import os
- 
-         df = pd.read_csv("~{maf_file}", sep="\t", comment="#", low_memory=False)
- 
-         def safe_float(x):
-             try: return float(x)
-             except: return None
- 
-         df["gnomAD_AF"] = df["gnomAD_AF"].apply(safe_float)
-         valid_exonic_list = "~{sep=',' valid_exonic}".split(",")
-         exclude_mutations_list = "~{sep=',' exclude_mutations}".split(",")
- 
-         filtered = df[
-             (df["gnomAD_AF"].notna()) &
-             (df["gnomAD_AF"] < ~{gnomad_af}) &
-             (df["Variant_Classification"].isin(valid_exonic_list)) &
-             (~df["Variant_Classification"].isin(exclude_mutations_list)) &
-             (df["t_depth"] > ~{t_depth}) &
-             (df["t_alt_count"] / df["t_depth"] > ~{t_vaf})
-         ]
- 
-         bed_df = filtered[["Chromosome","Start_Position","End_Position"]].copy()
-         bed_df["Start_Position"] = bed_df["Start_Position"] - 1
- 
-         
-         bed_path = os.path.join(os.getcwd(), "filter.bed")
-         bed_df.to_csv(bed_path, sep="\t", index=False, header=False)
- 
-         CODE
- 
-         # --- Step 2: apply BED filter to original VCF ---
-         # Extract tumour/normal names
-         grep "^##tumor_sample" ~{vcf_file} | cut -d '=' -f2 > samples.txt
-         grep "^##normal_sample" ~{vcf_file} | cut -d '=' -f2 >> samples.txt
- 
-         # Subset VCF to variants in BED + reorder samples
-         bcftools view -f PASS -S samples.txt -R "$PWD/filter.bed" ~{vcf_file} -Oz -o filtered.vcf.gz
- 
- ```
- ```
-         set -euo pipefail
- 
-         # extract tumour/normal names from header
-         zcat ~{vcf_file}|grep "^##tumor_sample"|cut -d '=' -f2 > samples.txt
-         zcat ~{vcf_file}|grep "^##normal_sample"|cut -d '=' -f2 >> samples.txt
- 
-         # Filter chain:
-         #   1. Keep PASS only
-         #   2. Reorder samples to Normal, Tumour
-         #   3. Filter on tumour depth
-         #   4. Filter on tumour VAF
-         bcftools view -f PASS -S samples.txt ~{vcf_file} -Ou \
-           | bcftools filter -i "(FORMAT/DP[1]) >= ~{t_depth}" -Ou \
-           | bcftools filter -i "(FORMAT/AD[1:1])/(FORMAT/DP[1]) >= ~{t_vaf}" -Oz -o filtered.vcf.gz
- ```
- ```
-         set -euo pipefail
- 
-         mkdir out
-         source $DEEP_TUMOUR_ROOT/.venv/bin/activate
-         python $DEEP_TUMOUR_ROOT/src/DeepTumour.py --vcfFile ~{vcf} --reference $HG19_ROOT/hg19_random.fa ~{liftover} --outDir out --keep_input
-         mv out/predictions_DeepTumour.json ~{outputFileNamePrefix}.predictions_DeepTumour.json
- 
- ```
- ## Support
+This section lists command(s) run by deepTumour workflow
+
+* Running deepTumour
+
+```
+        # --- Step 1: filter MAF with criteria ---
+        python3 <<CODE
+        import csv
+        import gzip
+
+        output_bed = "filter.bed"
+        open_func = gzip.open if "~{maf_file}".endswith(".gz") else open
+        with open_func("~{maf_file}", "rt") as maf, open(output_bed, "w") as out:
+            reader = csv.DictReader((l for l in maf if not l.startswith("#")), delimiter="\t")
+
+            for row in reader:
+                try:
+                    t_depth = int(row.get("t_depth", 0))
+                    t_alt = int(row.get("t_alt_count", 0))
+                    af = float(row.get("gnomAD_AF", "0") or "0")
+                except ValueError:
+                    continue
+
+                if (
+                    af < ~{gnomad_af}
+                    and row["Variant_Classification"] in "~{sep=',' valid_exonic}"
+                    and row["Variant_Classification"] not in "~{sep=',' exclude_mutations}"
+                    and t_depth > ~{t_depth}
+                    and (t_alt / t_depth) > ~{t_vaf}
+                ):
+                    chrom = row["Chromosome"]
+                    start = int(row["Start_Position"]) - 1
+                    end = int(row["End_Position"])
+                    out.write(f"{chrom}\t{start}\t{end}\n")
+        CODE
+
+        # --- Step 2: apply BED filter to original VCF ---
+        # Extract tumour/normal names
+        grep "^##tumor_sample" ~{vcf_file} | cut -d '=' -f2 > samples.txt
+        grep "^##normal_sample" ~{vcf_file} | cut -d '=' -f2 >> samples.txt
+
+        # Subset VCF to variants in BED + reorder samples
+        bcftools view -f PASS -S samples.txt -R "$PWD/filter.bed" ~{vcf_file} -Oz -o filtered.vcf.gz
+
+```
+```
+        set -euo pipefail
+
+        # extract tumour/normal names from header
+        zcat ~{vcf_file}|grep "^##tumor_sample"|cut -d '=' -f2 > samples.txt
+        zcat ~{vcf_file}|grep "^##normal_sample"|cut -d '=' -f2 >> samples.txt
+
+        # Filter chain:
+        #   1. Keep PASS only
+        #   2. Reorder samples to Normal, Tumour
+        #   3. Filter on tumour depth
+        #   4. Filter on tumour VAF
+        bcftools view -f PASS -S samples.txt ~{vcf_file} -Ou \
+          | bcftools filter -i "(FORMAT/DP[1]) >= ~{t_depth}" -Ou \
+          | bcftools filter -i "(FORMAT/AD[1:1])/(FORMAT/DP[1]) >= ~{t_vaf}" -Oz -o filtered.vcf.gz
+```
+```
+        set -euo pipefail
+
+        mkdir out
+        source $DEEP_TUMOUR_ROOT/.venv/bin/activate
+        python $DEEP_TUMOUR_ROOT/src/DeepTumour.py --vcfFile ~{vcf} --reference $HG19_ROOT/hg19_random.fa ~{liftover} --outDir out --keep_input
+        mv out/predictions_DeepTumour.json ~{outputFileNamePrefix}.predictions_DeepTumour.json
+
+```
+## Support
 
 For support, please file an issue on the [Github project](https://github.com/oicr-gsi) or send an email to gsi@oicr.on.ca .
 
