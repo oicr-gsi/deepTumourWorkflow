@@ -57,11 +57,16 @@ workflow deepTumour {
         deepTumourOutputJson: {
             description: "the output json assigns a match probability from 0.0 to 1.0 for each of the 29 tumour types on which it was trained and chooses the tumour type with the highest probability score. The algorithm also calculates a type of confidence score based on the probability scores' distributione. A low entropy (< 2.0) is considered a confident score. HIgher values are unreliable (but might be correct).",
             vidarr_label: "deepTumourOutputJson"
+        },
+        filteredVcFile: {
+            description: "the filtered vcf file as input of deepTumour, provision out for inspection",
+            vidarr_label: "filteredVcFile"
         }
       }
     }
     output {
         File deepTumourOutputJson = runDeepTumour.outputJson
+        File filteredVcFile = select_first([filterMaf.vcf_filtered, filterVcf.vcf_filtered])
     }
 }
 
@@ -71,7 +76,7 @@ task filterMaf {
         File vcf_file
         File vcf_index
         Int t_depth = 1
-        Float t_vaf = 0.01
+        Float t_vaf = 0.1
         Float gnomad_af = 0.001
         Array[String] valid_exonic = ["5'Flank","Frame_Shift_Del","Frame_Shift_Ins","In_Frame_Del","In_Frame_Ins",
             "Missense_Mutation","Nonsense_Mutation","Nonstop_Mutation","Silent",

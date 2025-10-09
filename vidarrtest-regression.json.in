@@ -37,7 +37,7 @@
                         },
                         "type": "EXTERNAL"
             },
-            "deepTumour.outputFileNamePrefix": "Test2",
+            "deepTumour.outputFileNamePrefix": "test_maf",
             "deepTumour.reference": "hg38",
             "deepTumour.filter_method": "maf",
             "deepTumour.filterMaf.t_depth": null,
@@ -67,7 +67,15 @@
             "deepTumour.deepTumourOutputJson": {
                 "contents": [
                     {
-                        "outputDirectory": "@SCRATCH@/@DATE@_Workflow_deepTumour_test_1_@JENKINSID@"
+                        "outputDirectory": "@SCRATCH@/@DATE@_Workflow_deepTumour_test_maf_@JENKINSID@"
+                    }
+                ],
+                "type": "ALL"
+            },
+            "deepTumour.filteredVcFile": {
+                "contents": [
+                    {
+                        "outputDirectory": "@SCRATCH@/@DATE@_Workflow_deepTumour_test_maf_@JENKINSID@"
                     }
                 ],
                 "type": "ALL"
@@ -77,7 +85,7 @@
             {
                 "metrics_calculate": "@CHECKOUT@/tests/calculate.sh",
                 "metrics_compare": "@CHECKOUT@/tests/compare.sh",
-                "output_metrics": "/.mounts/labs/gsi/testdata/deepTumour/output_metrics/workflow_test_01.metrics",
+                "output_metrics": "/.mounts/labs/gsi/testdata/deepTumour/output_metrics/workflow_test_maf.metrics",
                 "type": "script"
             }
         ]
@@ -109,7 +117,7 @@
                         "type": "EXTERNAL"
             },
             "deepTumour.inputMaf": null,
-            "deepTumour.outputFileNamePrefix": "Test_vcf",
+            "deepTumour.outputFileNamePrefix": "test_vcf",
             "deepTumour.reference": "hg38",
             "deepTumour.filter_method": "vcf",
             "deepTumour.filterMaf.t_depth": null,
@@ -139,7 +147,15 @@
             "deepTumour.deepTumourOutputJson": {
                 "contents": [
                     {
-                        "outputDirectory": "@SCRATCH@/@DATE@_Workflow_deepTumour_test_2_@JENKINSID@"
+                        "outputDirectory": "@SCRATCH@/@DATE@_Workflow_deepTumour_test_vcf_@JENKINSID@"
+                    }
+                ],
+                "type": "ALL"
+            },
+            "deepTumour.filteredVcFile": {
+                "contents": [
+                    {
+                        "outputDirectory": "@SCRATCH@/@DATE@_Workflow_deepTumour_test_vcf_@JENKINSID@"
                     }
                 ],
                 "type": "ALL"
@@ -149,7 +165,7 @@
             {
                 "metrics_calculate": "@CHECKOUT@/tests/calculate.sh",
                 "metrics_compare": "@CHECKOUT@/tests/compare.sh",
-                "output_metrics": "/.mounts/labs/gsi/testdata/deepTumour/output_metrics/workflow_test_02.metrics",
+                "output_metrics": "/.mounts/labs/gsi/testdata/deepTumour/output_metrics/workflow_test_vcf.metrics",
                 "type": "script"
             }
         ]
