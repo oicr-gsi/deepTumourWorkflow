@@ -38,7 +38,7 @@ Parameter|Value|Default|Description
 Parameter|Value|Default|Description
 ---|---|---|---
 `filterMaf.t_depth`|Int|1|tumour depth filter threshold
-`filterMaf.t_vaf`|Float|0.01|Tumor Variant Allele Frequency threshold
+`filterMaf.t_vaf`|Float|0.1|Tumor Variant Allele Frequency threshold
 `filterMaf.gnomad_af`|Float|0.001|gnomAD allele frequency threshold
 `filterMaf.valid_exonic`|Array[String]|["5'Flank", "Frame_Shift_Del", "Frame_Shift_Ins", "In_Frame_Del", "In_Frame_Ins", "Missense_Mutation", "Nonsense_Mutation", "Nonstop_Mutation", "Silent", "Splice_Region", "Splice_Site", "Targeted_Region", "Translation_Start_Site"]|list of exonic variants to keep
 `filterMaf.exclude_mutations`|Array[String]|["str_contraction", "t_lod_fstar"]|list of exonic variants to exclude
@@ -59,6 +59,7 @@ Parameter|Value|Default|Description
 Output | Type | Description | Labels
 ---|---|---|---
 `deepTumourOutputJson`|File|the output json assigns a match probability from 0.0 to 1.0 for each of the 29 tumour types on which it was trained and chooses the tumour type with the highest probability score. The algorithm also calculates a type of confidence score based on the probability scores' distributione. A low entropy (< 2.0) is considered a confident score. HIgher values are unreliable (but might be correct).|vidarr_label: deepTumourOutputJson
+`filteredVcFile`|File|the filtered vcf file as input of deepTumour, provision out for inspection|vidarr_label: filteredVcFile
 
 
 ## Commands
@@ -68,36 +69,34 @@ Output | Type | Description | Labels
  
  ```
          # --- Step 1: filter MAF with criteria ---
-         python3<<CODE
-         import pandas as pd
-         import os
+         python3 <<CODE
+         import csv
+         import gzip
  
-         df = pd.read_csv("~{maf_file}", sep="\t", comment="#", low_memory=False)
+         output_bed = "filter.bed"
+         open_func = gzip.open if "~{maf_file}".endswith(".gz") else open
+         with open_func("~{maf_file}", "rt") as maf, open(output_bed, "w") as out:
+             reader = csv.DictReader((l for l in maf if not l.startswith("#")), delimiter="\t")
  
-         def safe_float(x):
-             try: return float(x)
-             except: return None
+             for row in reader:
+                 try:
+                     t_depth = int(row.get("t_depth", 0))
+                     t_alt = int(row.get("t_alt_count", 0))
+                     af = float(row.get("gnomAD_AF", "0") or "0")
+                 except ValueError:
+                     continue
  
-         df["gnomAD_AF"] = df["gnomAD_AF"].apply(safe_float)
-         valid_exonic_list = "~{sep=',' valid_exonic}".split(",")
-         exclude_mutations_list = "~{sep=',' exclude_mutations}".split(",")
- 
-         filtered = df[
-             (df["gnomAD_AF"].notna()) &
-             (df["gnomAD_AF"] < ~{gnomad_af}) &
-             (df["Variant_Classification"].isin(valid_exonic_list)) &
-             (~df["Variant_Classification"].isin(exclude_mutations_list)) &
-             (df["t_depth"] > ~{t_depth}) &
-             (df["t_alt_count"] / df["t_depth"] > ~{t_vaf})
-         ]
- 
-         bed_df = filtered[["Chromosome","Start_Position","End_Position"]].copy()
-         bed_df["Start_Position"] = bed_df["Start_Position"] - 1
- 
-         
-         bed_path = os.path.join(os.getcwd(), "filter.bed")
-         bed_df.to_csv(bed_path, sep="\t", index=False, header=False)
- 
+                 if (
+                     af < ~{gnomad_af}
+                     and row["Variant_Classification"] in "~{sep=',' valid_exonic}"
+                     and row["Variant_Classification"] not in "~{sep=',' exclude_mutations}"
+                     and t_depth > ~{t_depth}
+                     and (t_alt / t_depth) > ~{t_vaf}
+                 ):
+                     chrom = row["Chromosome"]
+                     start = int(row["Start_Position"]) - 1
+                     end = int(row["End_Position"])
+                     out.write(f"{chrom}\t{start}\t{end}\n")
          CODE
  
          # --- Step 2: apply BED filter to original VCF ---

@@ -22,3 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changed to use DeepTumour 3.0.5, included improvements in upstream
 ### Added
 - Added filterMaf and filterVcf tasks
+
+## [1.0.6] - 2025-10-08
+### Changed
+- Optimized filterMaf memory usage
+
+## [1.0.7] - 2025-10-09
+### Added
+- Added provision out filterd vcf file
