@@ -4,7 +4,7 @@ version 1.0
 workflow deepTumour {
     input {
         File inputVcf
-        File inputVcfIndex
+        File? inputVcfIndex
         File? inputMaf
         String outputFileNamePrefix     
         String reference
@@ -24,13 +24,15 @@ workflow deepTumour {
             input:
             maf_file = select_first([inputMaf]),
             vcf_file = inputVcf,
-            vcf_index = inputVcfIndex
+            vcf_index = inputVcfIndex,
+            outputFileNamePrefix = outputFileNamePrefix 
         }
     }
     if (filter_method == "vcf") {
         call filterVcf {
             input:
-            vcf_file = inputVcf
+            vcf_file = inputVcf,
+            outputFileNamePrefix = outputFileNamePrefix 
         }
     }
     File filteredVcf = select_first([filterMaf.vcf_filtered, filterVcf.vcf_filtered])
@@ -40,7 +42,7 @@ workflow deepTumour {
         vcf = filteredVcf,
         outputFileNamePrefix = outputFileNamePrefix,
         reference_genome = reference,
-        modules = "deep-tumour/3.0.5 hg19/p13 bcftools/1.9"
+        modules = "deep-tumour/3.0.3.1 hg19/p13 bcftools/1.9"
     }
 
     meta {
@@ -49,7 +51,7 @@ workflow deepTumour {
         description: "The DeepTumour algorithm predicts the tissue of origin of a tumour based on the pattern of passenger mutations identified by Whole Genome Sequencing (WGS)."
         dependencies: [
             {
-                name: "deep-tumour/3.0.5",
+                name: "deep-tumour/3.0.3.1",
                 url: "https://github.com/LincolnSteinLab/DeepTumour"
             }
         ]
@@ -67,6 +69,8 @@ workflow deepTumour {
     output {
         File deepTumourOutputJson = runDeepTumour.outputJson
         File filteredVcFile = select_first([filterMaf.vcf_filtered, filterVcf.vcf_filtered])
+        File preprocess_input = runDeepTumour.preprocess_input
+        File post_liftover_vcf = runDeepTumour.post_liftover_vcf
     }
 }
 
@@ -74,7 +78,8 @@ task filterMaf {
     input {
         File maf_file
         File vcf_file
-        File vcf_index
+        File? vcf_index
+        String outputFileNamePrefix 
         Int t_depth = 1
         Float t_vaf = 0.1
         Float gnomad_af = 0.001
@@ -82,7 +87,7 @@ task filterMaf {
             "Missense_Mutation","Nonsense_Mutation","Nonstop_Mutation","Silent",
             "Splice_Region","Splice_Site","Targeted_Region","Translation_Start_Site"]
         Array[String] exclude_mutations = ["str_contraction", "t_lod_fstar"]
-        String modules = "pandas/2.1.3 bcftools/1.9"
+        String modules = "bcftools/1.9"
         Int jobMemory = 24
         Int timeout = 2
     }
@@ -121,8 +126,6 @@ task filterMaf {
 
                 if (
                     af < ~{gnomad_af}
-                    and row["Variant_Classification"] in "~{sep=',' valid_exonic}"
-                    and row["Variant_Classification"] not in "~{sep=',' exclude_mutations}"
                     and t_depth > ~{t_depth}
                     and (t_alt / t_depth) > ~{t_vaf}
                 ):
@@ -134,11 +137,19 @@ task filterMaf {
 
         # --- Step 2: apply BED filter to original VCF ---
         # Extract tumour/normal names
-        grep "^##tumor_sample" ~{vcf_file} | cut -d '=' -f2 > samples.txt
-        grep "^##normal_sample" ~{vcf_file} | cut -d '=' -f2 >> samples.txt
+        cat_vcf() {
+            if [[ $1 == *.gz ]]; then
+                zcat "$1"
+            else
+                cat "$1"
+            fi
+        }
+
+        cat_vcf ~{vcf_file} | head -1000 | grep "^##tumor_sample" | cut -d '=' -f2 > samples.txt
+        cat_vcf ~{vcf_file} | head -1000 | grep "^##normal_sample" | cut -d '=' -f2 >> samples.txt
 
         # Subset VCF to variants in BED + reorder samples
-        bcftools view -f PASS -S samples.txt -R "$PWD/filter.bed" ~{vcf_file} -Oz -o filtered.vcf.gz
+        bcftools view -f PASS -S samples.txt -R "$PWD/filter.bed" ~{vcf_file} -Oz -o ~{outputFileNamePrefix}.filtered.vcf.gz
 
     >>>
     runtime {
@@ -147,13 +158,14 @@ task filterMaf {
         timeout: "~{timeout}"
     }
     output {
-        File vcf_filtered = "filtered.vcf.gz"
+        File vcf_filtered = "~{outputFileNamePrefix}.filtered.vcf.gz"
     }
 }
 
 task filterVcf {
     input {
         File vcf_file
+        String outputFileNamePrefix 
         Int t_depth = 1
         Float t_vaf = 0.01
         String modules = "bcftools/1.9"
@@ -172,9 +184,15 @@ task filterVcf {
     command <<<
         set -euo pipefail
 
-        # extract tumour/normal names from header
-        zcat ~{vcf_file}|grep "^##tumor_sample"|cut -d '=' -f2 > samples.txt
-        zcat ~{vcf_file}|grep "^##normal_sample"|cut -d '=' -f2 >> samples.txt
+        cat_vcf() {
+            if [[ $1 == *.gz ]]; then
+                zcat "$1"
+            else
+                cat "$1"
+            fi
+        }
+        cat_vcf ~{vcf_file} | grep "^#CHROM" | head -1 | awk '{print $11; print $10}' > samples.txt
+        
 
         # Filter chain:
         #   1. Keep PASS only
@@ -183,7 +201,7 @@ task filterVcf {
         #   4. Filter on tumour VAF
         bcftools view -f PASS -S samples.txt ~{vcf_file} -Ou \
           | bcftools filter -i "(FORMAT/DP[1]) >= ~{t_depth}" -Ou \
-          | bcftools filter -i "(FORMAT/AD[1:1])/(FORMAT/DP[1]) >= ~{t_vaf}" -Oz -o filtered.vcf.gz
+          | bcftools filter -i "(FORMAT/AD[1:1])/(FORMAT/DP[1]) >= ~{t_vaf}" -Oz -o ~{outputFileNamePrefix}.filtered.vcf.gz
     >>>
 
     runtime {
@@ -193,7 +211,7 @@ task filterVcf {
     }
 
     output {
-        File vcf_filtered = "filtered.vcf.gz"
+        File vcf_filtered = "~{outputFileNamePrefix}.filtered.vcf.gz"
     }
 }
 
@@ -221,9 +239,10 @@ task runDeepTumour {
 
         mkdir out
         source $DEEP_TUMOUR_ROOT/.venv/bin/activate
-        python $DEEP_TUMOUR_ROOT/src/DeepTumour.py --vcfFile ~{vcf} --reference $HG19_ROOT/hg19_random.fa ~{liftover} --outDir out --keep_input
+        python $DEEP_TUMOUR_ROOT/src/DeepTumour.py --vcfFile ~{vcf} --reference $HG19_ROOT/hg19_random.fa ~{liftover} --outDir out --keep_input --save-intermediate
         mv out/predictions_DeepTumour.json ~{outputFileNamePrefix}.predictions_DeepTumour.json
-
+        mv out/DeepTumour_preprocess_input.csv ~{outputFileNamePrefix}.DeepTumour_preprocess_input.csv
+        mv out/_post_liftover.vcf ~{outputFileNamePrefix}.post_liftover.vcf
     >>>
 
     runtime {
@@ -234,6 +253,8 @@ task runDeepTumour {
 
     output {
         File outputJson = "~{outputFileNamePrefix}.predictions_DeepTumour.json"
+        File preprocess_input = "~{outputFileNamePrefix}.DeepTumour_preprocess_input.csv"
+        File post_liftover_vcf = "~{outputFileNamePrefix}.post_liftover.vcf"
     }
 
     meta {
