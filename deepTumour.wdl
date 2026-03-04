@@ -7,6 +7,8 @@ workflow deepTumour {
         File inputVcfIndex
         String outputFileNamePrefix     
         String reference
+        Int min_variants = 1000
+        Int max_variants = 5000
     }
 
     parameter_meta {
@@ -19,15 +21,21 @@ workflow deepTumour {
     call filterVcf {
         input:
         vcf_file = inputVcf,
-        vcf_index = inputVcfIndex
+        vcf_index = inputVcfIndex,
+        outputFileNamePrefix = outputFileNamePrefix 
     }
-    
-    call runDeepTumour {
-        input:
-        vcf = filterVcf.filtered_vcf,
-        outputFileNamePrefix = outputFileNamePrefix,
-        reference_genome = reference,
-        modules = "deep-tumour/3.0.5.1 hg19/p13 bcftools/1.9"
+
+    Int snp_count = read_int(filterVcf.final_snp_count)
+    Boolean sufficient_variants = snp_count >= min_variants && snp_count <= max_variants
+
+    if (sufficient_variants) {
+        call runDeepTumour {
+            input:
+            vcf = filterVcf.filtered_vcf,
+            outputFileNamePrefix = outputFileNamePrefix,
+            reference_genome = reference,
+            modules = "deep-tumour/3.0.5.1 hg19/p13 bcftools/1.9"
+        }
     }
 
     meta {
@@ -52,7 +60,9 @@ workflow deepTumour {
       }
     }
     output {
-        File deepTumourOutputJson = runDeepTumour.outputJson
+        File? deepTumourOutputJson = runDeepTumour.outputJson
+        File  filtered_vcf      = filterVcf.filtered_vcf
+        File  snp_count_after_filter   = filterVcf.final_snp_count
     }
 }
 
@@ -60,6 +70,7 @@ task filterVcf {
     input {
         File vcf_file
         File vcf_index
+        String outputFileNamePrefix 
         File repeat_bed = "/.mounts/labs/gsiprojects/gsi/gsiusers/gpeng/workflow/deepTumour/test/bed_files/hg38.repeat_regions.merged.bgzip.bed.gz"
         File repeat_bed_idx = "/.mounts/labs/gsiprojects/gsi/gsiusers/gpeng/workflow/deepTumour/test/bed_files/hg38.repeat_regions.merged.bgzip.bed.gz.tbi"
         Float t_vaf = 0.15
@@ -201,6 +212,14 @@ CODE
 
         echo "=== Final output ===" >&2
         bcftools stats filtered.vcf.gz | grep "^SN" >&2
+        FINAL_SNPS=$(bcftools stats filtered.vcf.gz \
+            | grep "^SN" | grep "number of SNPs" | cut -f4)
+        echo "Final SNP count: ${FINAL_SNPS}" >&2
+
+        # Write count to file for WDL output
+        echo "${FINAL_SNPS}" > ~{outputFileNamePrefix}.final_snp_count.txt
+        mv filtered.vcf.gz  ~{outputFileNamePrefix}.filtered.vcf.gz
+        mv filtered.vcf.gz.tbi  ~{outputFileNamePrefix}.filtered.vcf.gz.tbi
 
     >>>
 
@@ -211,9 +230,9 @@ CODE
     }
 
     output {
-        File filtered_vcf     = "filtered.vcf.gz"
-        File filtered_vcf_idx = "filtered.vcf.gz.tbi"
-        File filter_bed       = "filter.bed"
+        File    filtered_vcf         = "~{outputFileNamePrefix}.filtered.vcf.gz"
+        File    filtered_vcf_idx     = "~{outputFileNamePrefix}.filtered.vcf.gz.tbi"
+        File final_snp_count     = "~{outputFileNamePrefix}.final_snp_count.txt"
     }
 }
 
