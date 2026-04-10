@@ -16,6 +16,8 @@ workflow deepTumour {
         inputVcfIndex: "index of input vcf"
         outputFileNamePrefix: "Prefix for output files"
         reference: "The genome reference build. For example: hg19, hg38"
+        min_variants: "Minimum number of SNPs required after filtering to run DeepTumour (default 1000)"
+        max_variants: "Maximum number of SNPs allowed after filtering to run DeepTumour (default 5000)"
     }
 
     call filterVcf {
@@ -53,9 +55,13 @@ workflow deepTumour {
             description: "the output json assigns a match probability from 0.0 to 1.0 for each of the 29 tumour types on which it was trained and chooses the tumour type with the highest probability score. The algorithm also calculates a type of confidence score based on the probability scores' distributione. A low entropy (< 2.0) is considered a confident score. HIgher values are unreliable (but might be correct).",
             vidarr_label: "deepTumourOutputJson"
         },
-        filteredVcFile: {
+        filtered_vcf: {
             description: "the filtered vcf file as input of deepTumour, provision out for inspection",
-            vidarr_label: "filteredVcFile"
+            vidarr_label: "filteredVcf"
+        },
+        snp_count_after_filter: {
+            description: "text file containing the number of SNPs remaining after filtering, used to determine whether DeepTumour is run",
+            vidarr_label: "snpCountAfterFilter"
         }
       }
     }
@@ -86,6 +92,7 @@ task filterVcf {
     parameter_meta {
         vcf_file:        "Input Mutect2 VCF (hg38, gzipped)"
         vcf_index:       "Index of input VCF"
+        outputFileNamePrefix: "Prefix for output files"
         repeat_bed:      "Merged repeat regions BED file (bgzipped, hg38)"
         repeat_bed_idx:  "Tabix index for repeat_bed"
         t_vaf:           "Minimum tumor VAF (default 0.15)"

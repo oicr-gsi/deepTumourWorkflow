@@ -30,3 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.7] - 2025-10-09
 ### Added
 - Added provision out filterd vcf file
+
+## [1.0.8] - 2026-04-10
+### Added
+- Added multiple steps filtering
+### Removed
+- removed maf as input and filterMaf task
