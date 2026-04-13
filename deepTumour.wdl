@@ -5,42 +5,39 @@ workflow deepTumour {
     input {
         File inputVcf
         File inputVcfIndex
-        File? inputMaf
         String outputFileNamePrefix     
         String reference
-        String filter_method
+        Int min_variants = 1000
+        Int max_variants = 5000
     }
 
     parameter_meta {
         inputVcf: "The input vcf file"
         inputVcfIndex: "index of input vcf"
-        inputMaf: "the input maf file"
         outputFileNamePrefix: "Prefix for output files"
         reference: "The genome reference build. For example: hg19, hg38"
-        filter_method: "method to filter input vcf directly or filter using maf, value can only be either 'maf' or 'vcf'"
+        min_variants: "Minimum number of SNPs required after filtering to run DeepTumour (default 1000)"
+        max_variants: "Maximum number of SNPs allowed after filtering to run DeepTumour (default 5000)"
     }
-    if (filter_method == "maf" && defined(inputMaf)) {
-        call filterMaf {
-            input:
-            maf_file = select_first([inputMaf]),
-            vcf_file = inputVcf,
-            vcf_index = inputVcfIndex
-        }
-    }
-    if (filter_method == "vcf") {
-        call filterVcf {
-            input:
-            vcf_file = inputVcf
-        }
-    }
-    File filteredVcf = select_first([filterMaf.vcf_filtered, filterVcf.vcf_filtered])
-    
-    call runDeepTumour {
+
+    call filterVcf {
         input:
-        vcf = filteredVcf,
-        outputFileNamePrefix = outputFileNamePrefix,
-        reference_genome = reference,
-        modules = "deep-tumour/3.0.5 hg19/p13 bcftools/1.9"
+        vcf_file = inputVcf,
+        vcf_index = inputVcfIndex,
+        outputFileNamePrefix = outputFileNamePrefix 
+    }
+
+    Int snp_count = read_int(filterVcf.final_snp_count)
+    Boolean sufficient_variants = snp_count >= min_variants && snp_count <= max_variants
+
+    if (sufficient_variants) {
+        call runDeepTumour {
+            input:
+            vcf = filterVcf.filtered_vcf,
+            outputFileNamePrefix = outputFileNamePrefix,
+            reference_genome = reference,
+            modules = "deep-tumour/3.0.5.1 hg19/p13 bcftools/1.9"
+        }
     }
 
     meta {
@@ -58,142 +55,191 @@ workflow deepTumour {
             description: "the output json assigns a match probability from 0.0 to 1.0 for each of the 29 tumour types on which it was trained and chooses the tumour type with the highest probability score. The algorithm also calculates a type of confidence score based on the probability scores' distributione. A low entropy (< 2.0) is considered a confident score. HIgher values are unreliable (but might be correct).",
             vidarr_label: "deepTumourOutputJson"
         },
-        filteredVcFile: {
+        filtered_vcf: {
             description: "the filtered vcf file as input of deepTumour, provision out for inspection",
-            vidarr_label: "filteredVcFile"
+            vidarr_label: "filteredVcf"
+        },
+        snp_count_after_filter: {
+            description: "text file containing the number of SNPs remaining after filtering, used to determine whether DeepTumour is run",
+            vidarr_label: "snpCountAfterFilter"
         }
       }
     }
     output {
-        File deepTumourOutputJson = runDeepTumour.outputJson
-        File filteredVcFile = select_first([filterMaf.vcf_filtered, filterVcf.vcf_filtered])
-    }
-}
-
-task filterMaf {
-    input {
-        File maf_file
-        File vcf_file
-        File vcf_index
-        Int t_depth = 1
-        Float t_vaf = 0.1
-        Float gnomad_af = 0.001
-        Array[String] valid_exonic = ["5'Flank","Frame_Shift_Del","Frame_Shift_Ins","In_Frame_Del","In_Frame_Ins",
-            "Missense_Mutation","Nonsense_Mutation","Nonstop_Mutation","Silent",
-            "Splice_Region","Splice_Site","Targeted_Region","Translation_Start_Site"]
-        Array[String] exclude_mutations = ["str_contraction", "t_lod_fstar"]
-        String modules = "pandas/2.1.3 bcftools/1.9"
-        Int jobMemory = 24
-        Int timeout = 2
-    }
-    parameter_meta {
-        maf_file:  "Input maf file"
-        vcf_file:  "Input vcf file"
-        vcf_index: "index of input vcf"
-        t_depth: "tumour depth filter threshold"
-        t_vaf: "Tumor Variant Allele Frequency threshold"
-        gnomad_af: "gnomAD allele frequency threshold"
-        valid_exonic: "list of exonic variants to keep"
-        exclude_mutations: "list of exonic variants to exclude"
-        jobMemory: "Memory allocated indexing job"
-        modules:   "Required environment modules"
-        timeout:   "Hours before task timeout"   
-    }
-
-    command <<<
-        # --- Step 1: filter MAF with criteria ---
-        python3 <<CODE
-        import csv
-        import gzip
-
-        output_bed = "filter.bed"
-        open_func = gzip.open if "~{maf_file}".endswith(".gz") else open
-        with open_func("~{maf_file}", "rt") as maf, open(output_bed, "w") as out:
-            reader = csv.DictReader((l for l in maf if not l.startswith("#")), delimiter="\t")
-
-            for row in reader:
-                try:
-                    t_depth = int(row.get("t_depth", 0))
-                    t_alt = int(row.get("t_alt_count", 0))
-                    af = float(row.get("gnomAD_AF", "0") or "0")
-                except ValueError:
-                    continue
-
-                if (
-                    af < ~{gnomad_af}
-                    and row["Variant_Classification"] in "~{sep=',' valid_exonic}"
-                    and row["Variant_Classification"] not in "~{sep=',' exclude_mutations}"
-                    and t_depth > ~{t_depth}
-                    and (t_alt / t_depth) > ~{t_vaf}
-                ):
-                    chrom = row["Chromosome"]
-                    start = int(row["Start_Position"]) - 1
-                    end = int(row["End_Position"])
-                    out.write(f"{chrom}\t{start}\t{end}\n")
-        CODE
-
-        # --- Step 2: apply BED filter to original VCF ---
-        # Extract tumour/normal names
-        grep "^##tumor_sample" ~{vcf_file} | cut -d '=' -f2 > samples.txt
-        grep "^##normal_sample" ~{vcf_file} | cut -d '=' -f2 >> samples.txt
-
-        # Subset VCF to variants in BED + reorder samples
-        bcftools view -f PASS -S samples.txt -R "$PWD/filter.bed" ~{vcf_file} -Oz -o filtered.vcf.gz
-
-    >>>
-    runtime {
-        memory: "~{jobMemory} GB"
-        modules: "~{modules}"
-        timeout: "~{timeout}"
-    }
-    output {
-        File vcf_filtered = "filtered.vcf.gz"
+        File? deepTumourOutputJson = runDeepTumour.outputJson
+        File  filtered_vcf      = filterVcf.filtered_vcf
+        File  snp_count_after_filter   = filterVcf.final_snp_count
     }
 }
 
 task filterVcf {
     input {
         File vcf_file
-        Int t_depth = 1
-        Float t_vaf = 0.01
-        String modules = "bcftools/1.9"
-        Int jobMemory = 8
-        Int timeout = 1
+        File vcf_index
+        String outputFileNamePrefix 
+        File repeat_bed = "/.mounts/labs/gsiprojects/gsi/gsiusers/gpeng/workflow/deepTumour/test/bed_files/hg38.repeat_regions.merged.bgzip.bed.gz"
+        File repeat_bed_idx = "/.mounts/labs/gsiprojects/gsi/gsiusers/gpeng/workflow/deepTumour/test/bed_files/hg38.repeat_regions.merged.bgzip.bed.gz.tbi"
+        Float t_vaf = 0.15
+        Float n_vaf = 0.03
+        Int mmq_threshold = 40
+        Int cluster_window = 10
+        Int cluster_count = 3
+        Int indel_proximity = 5
+        String modules = "bcftools/1.9 python/3.10.6"
+        Int jobMemory = 24
+        Int timeout = 4
     }
     parameter_meta {
-        vcf_file:  "Input vcf file"
-        t_depth: "tumour depth filter threshold"
-        t_vaf: "Tumor Variant Allele Frequency threshold"
-        jobMemory: "Memory allocated indexing job"
-        modules:   "Required environment modules"
-        timeout:   "Hours before task timeout"
+        vcf_file:        "Input Mutect2 VCF (hg38, gzipped)"
+        vcf_index:       "Index of input VCF"
+        outputFileNamePrefix: "Prefix for output files"
+        repeat_bed:      "Merged repeat regions BED file (bgzipped, hg38)"
+        repeat_bed_idx:  "Tabix index for repeat_bed"
+        t_vaf:           "Minimum tumor VAF (default 0.15)"
+        n_vaf:           "Maximum normal VAF — variants above this are excluded (default 0.03)"
+        mmq_threshold:   "Minimum alt allele median mapping quality (default 40)"
+        cluster_window:  "Window size in bp for clustered SNV exclusion (default 10)"
+        cluster_count:   "Min SNVs in window to trigger cluster exclusion (default 3)"
+        indel_proximity: "Exclude SNVs within this many bp of an indel (default 5)"
+        jobMemory:       "Memory allocated to job"
+        modules:         "Required environment modules"
+        timeout:         "Hours before task timeout"
     }
 
     command <<<
-        set -euo pipefail
+       set -euo pipefail
 
-        # extract tumour/normal names from header
-        zcat ~{vcf_file}|grep "^##tumor_sample"|cut -d '=' -f2 > samples.txt
-        zcat ~{vcf_file}|grep "^##normal_sample"|cut -d '=' -f2 >> samples.txt
+        echo "=== Step 1: bcftools filters ===" >&2
 
-        # Filter chain:
-        #   1. Keep PASS only
-        #   2. Reorder samples to Normal, Tumour
-        #   3. Filter on tumour depth
-        #   4. Filter on tumour VAF
-        bcftools view -f PASS -S samples.txt ~{vcf_file} -Ou \
-          | bcftools filter -i "(FORMAT/DP[1]) >= ~{t_depth}" -Ou \
-          | bcftools filter -i "(FORMAT/AD[1:1])/(FORMAT/DP[1]) >= ~{t_vaf}" -Oz -o filtered.vcf.gz
+        # Extract sample names safely — grep -m1 causes SIGPIPE with set -o pipefail
+        set +o pipefail
+        TUMOR=$(zcat ~{vcf_file} | grep -m1 "^##tumor_sample"  | cut -d'=' -f2 | tr -d '\r')
+        NORMAL=$(zcat ~{vcf_file} | grep -m1 "^##normal_sample" | cut -d'=' -f2 | tr -d '\r')
+        set -o pipefail
+
+        echo "Tumor:  $TUMOR" >&2
+        echo "Normal: $NORMAL" >&2
+
+        if [ -z "$TUMOR" ] || [ -z "$NORMAL" ]; then
+            echo "ERROR: Could not extract tumor/normal sample names from VCF header" >&2
+            exit 1
+        fi
+
+        bcftools view -f PASS ~{vcf_file} \
+        | bcftools view -s "${TUMOR},${NORMAL}" \
+        | bcftools filter \
+            -i "FORMAT/AF[0:0] >= ~{t_vaf}
+                && FORMAT/AF[1:0] < ~{n_vaf}
+                && INFO/MMQ[1] >= 40" \
+        | bcftools view -T ^~{repeat_bed} \
+        -Oz -o prefiltered.vcf.gz
+
+        bcftools index -t prefiltered.vcf.gz
+        
+        echo "After bcftools filters:" >&2
+        bcftools stats prefiltered.vcf.gz | grep "^SN" >&2
+
+        echo "=== Step 2: clustered SNV + indel proximity filter ===" >&2
+
+        # Extract SNP positions and indel positions separately
+        bcftools view -v snps prefiltered.vcf.gz \
+          | bcftools query -f '%CHROM\t%POS\n' > snp_positions.txt
+        bcftools view -v indels prefiltered.vcf.gz \
+          | bcftools query -f '%CHROM\t%POS\n' > indel_positions.txt
+
+        echo "SNPs before clustering/indel filter: $(wc -l < snp_positions.txt)" >&2
+        echo "Indels (for proximity filter): $(wc -l < indel_positions.txt)" >&2
+
+        python3 <<CODE
+import sys
+from collections import defaultdict
+
+clust_win  = ~{cluster_window}
+clust_cnt  = ~{cluster_count}
+indel_prox = ~{indel_proximity}
+
+# Load SNP positions
+snp_positions = defaultdict(list)
+with open("snp_positions.txt") as f:
+    for line in f:
+        chrom, pos = line.strip().split("\t")
+        snp_positions[chrom].append(int(pos))
+
+# Load indel positions
+indel_positions = defaultdict(list)
+with open("indel_positions.txt") as f:
+    for line in f:
+        parts = line.strip().split("\t")
+        if len(parts) == 2:
+            indel_positions[parts[0]].append(int(parts[1]))
+
+# Clustered SNV filter
+def is_clustered(chrom, pos):
+    return sum(1 for p in snp_positions[chrom] if abs(p - pos) <= clust_win) >= clust_cnt
+
+# Indel proximity filter
+def near_indel(chrom, pos):
+    return any(abs(pos - ipos) <= indel_prox for ipos in indel_positions.get(chrom, []))
+
+n_cluster = 0
+n_indel   = 0
+kept = []
+for chrom, positions in snp_positions.items():
+    for pos in positions:
+        if is_clustered(chrom, pos):
+            n_cluster += 1
+        elif near_indel(chrom, pos):
+            n_indel += 1
+        else:
+            kept.append((chrom, pos))
+
+print(f"Fail clustered SNV:       {n_cluster}", file=sys.stderr)
+print(f"Fail indel proximity:     {n_indel}", file=sys.stderr)
+print(f"Pass all filters:         {len(kept)}", file=sys.stderr)
+
+# Write passing positions as BED (0-based)
+with open("filter.bed", "w") as out:
+    for chrom, pos in kept:
+        out.write(f"{chrom}\t{pos-1}\t{pos}\n")
+CODE
+
+        echo "=== Step 3: extract final VCF ===" >&2
+
+        # Extract sample names for correct column ordering
+        set +o pipefail
+        zcat ~{vcf_file} | grep -m1 "^##tumor_sample"  | cut -d '=' -f2 >  samples.txt
+        zcat ~{vcf_file} | grep -m1 "^##normal_sample" | cut -d '=' -f2 >> samples.txt
+        set -o pipefail
+        echo "Samples:" >&2
+        cat samples.txt >&2
+
+        bcftools view -S samples.txt -R "$PWD/filter.bed" prefiltered.vcf.gz \
+          -Oz -o filtered.vcf.gz
+        bcftools index -t filtered.vcf.gz
+
+        echo "=== Final output ===" >&2
+        bcftools stats filtered.vcf.gz | grep "^SN" >&2
+        FINAL_SNPS=$(bcftools stats filtered.vcf.gz \
+            | grep "^SN" | grep "number of SNPs" | cut -f4)
+        echo "Final SNP count: ${FINAL_SNPS}" >&2
+
+        # Write count to file for WDL output
+        echo "${FINAL_SNPS}" > ~{outputFileNamePrefix}.final_snp_count.txt
+        mv filtered.vcf.gz  ~{outputFileNamePrefix}.filtered.vcf.gz
+        mv filtered.vcf.gz.tbi  ~{outputFileNamePrefix}.filtered.vcf.gz.tbi
+
     >>>
 
     runtime {
-        memory: "~{jobMemory} GB"
+        memory:  "~{jobMemory} GB"
         modules: "~{modules}"
         timeout: "~{timeout}"
     }
 
     output {
-        File vcf_filtered = "filtered.vcf.gz"
+        File    filtered_vcf         = "~{outputFileNamePrefix}.filtered.vcf.gz"
+        File    filtered_vcf_idx     = "~{outputFileNamePrefix}.filtered.vcf.gz.tbi"
+        File final_snp_count     = "~{outputFileNamePrefix}.final_snp_count.txt"
     }
 }
 

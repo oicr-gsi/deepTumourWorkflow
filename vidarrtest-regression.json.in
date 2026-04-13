@@ -25,111 +25,18 @@
                         },
                         "type": "EXTERNAL"
             },
-            "deepTumour.inputMaf": {
-                        "contents": {
-                            "configuration": "/.mounts/labs/gsi/testdata/deepTumour/test_inputs/test2_mutect2.filtered.maf.gz",
-                            "externalIds": [
-                                {
-                                    "id": "TEST",
-                                    "provider": "TEST"
-                                }
-                            ]
-                        },
-                        "type": "EXTERNAL"
-            },
-            "deepTumour.outputFileNamePrefix": "test_maf",
-            "deepTumour.reference": "hg38",
-            "deepTumour.filter_method": "maf",
-            "deepTumour.filterMaf.t_depth": null,
-            "deepTumour.filterMaf.t_vaf": null,
-            "deepTumour.filterMaf.gnomad_af": null,
-            "deepTumour.filterMaf.valid_exonic": null,
-            "deepTumour.filterMaf.exclude_mutations": null,
-            "deepTumour.filterMaf.modules": null,
-            "deepTumour.filterMaf.jobMemory": null,
-            "deepTumour.filterMaf.timeout": null,
-            "deepTumour.filterVcf.t_depth": null,
-            "deepTumour.filterVcf.t_vaf": null,
-            "deepTumour.filterVcf.modules": null,
-            "deepTumour.filterVcf.jobMemory": null,
-            "deepTumour.filterVcf.timeout": null,
-            "deepTumour.runDeepTumour.modules": null,
-            "deepTumour.runDeepTumour.jobMemory": null,
-            "deepTumour.runDeepTumour.timeout": null
-        },
-        "description": "deepTumour workflow test filterMaf",
-        "engineArguments": {
-           "write_to_cache": false,
-           "read_from_cache": false
-        },
-        "id": "deepTumour_test_filterMaf",
-        "metadata": {
-            "deepTumour.deepTumourOutputJson": {
-                "contents": [
-                    {
-                        "outputDirectory": "@SCRATCH@/@DATE@_Workflow_deepTumour_test_maf_@JENKINSID@"
-                    }
-                ],
-                "type": "ALL"
-            },
-            "deepTumour.filteredVcFile": {
-                "contents": [
-                    {
-                        "outputDirectory": "@SCRATCH@/@DATE@_Workflow_deepTumour_test_maf_@JENKINSID@"
-                    }
-                ],
-                "type": "ALL"
-            }
-        },
-        "validators": [
-            {
-                "metrics_calculate": "@CHECKOUT@/tests/calculate.sh",
-                "metrics_compare": "@CHECKOUT@/tests/compare.sh",
-                "output_metrics": "/.mounts/labs/gsi/testdata/deepTumour/output_metrics/workflow_test_maf.metrics",
-                "type": "script"
-            }
-        ]
-    },
-       {
-        "arguments": {
-            "deepTumour.inputVcf": {
-                        "contents": {
-                            "configuration": "/.mounts/labs/gsi/testdata/deepTumour/test_inputs/Test02.mutect2.filtered.vep.vcf.gz",
-                            "externalIds": [
-                                {
-                                    "id": "TEST",
-                                    "provider": "TEST"
-                                }
-                            ]
-                        },
-                        "type": "EXTERNAL"
-            },
-            "deepTumour.inputVcfIndex": {
-                        "contents": {
-                            "configuration": "/.mounts/labs/gsi/testdata/deepTumour/test_inputs/Test02.mutect2.filtered.vep.vcf.gz.tbi",
-                            "externalIds": [
-                                {
-                                    "id": "TEST",
-                                    "provider": "TEST"
-                                }
-                            ]
-                        },
-                        "type": "EXTERNAL"
-            },
-            "deepTumour.inputMaf": null,
             "deepTumour.outputFileNamePrefix": "test_vcf",
             "deepTumour.reference": "hg38",
-            "deepTumour.filter_method": "vcf",
-            "deepTumour.filterMaf.t_depth": null,
-            "deepTumour.filterMaf.t_vaf": null,
-            "deepTumour.filterMaf.gnomad_af": null,
-            "deepTumour.filterMaf.valid_exonic": null,
-            "deepTumour.filterMaf.exclude_mutations": null,
-            "deepTumour.filterMaf.modules": null,
-            "deepTumour.filterMaf.jobMemory": null,
-            "deepTumour.filterMaf.timeout": null,
-            "deepTumour.filterVcf.t_depth": null,
+            "deepTumour.min_variants": null,
+            "deepTumour.max_variants": null,
+            "deepTumour.filterVcf.repeat_bed": null,
+            "deepTumour.filterVcf.repeat_bed_idx": null,
             "deepTumour.filterVcf.t_vaf": null,
+            "deepTumour.filterVcf.n_vaf": null,
+            "deepTumour.filterVcf.mmq_threshold": null,
+            "deepTumour.filterVcf.cluster_window": null,
+            "deepTumour.filterVcf.cluster_count": null,
+            "deepTumour.filterVcf.indel_proximity": null,
             "deepTumour.filterVcf.modules": null,
             "deepTumour.filterVcf.jobMemory": null,
             "deepTumour.filterVcf.timeout": null,
@@ -152,7 +59,15 @@
                 ],
                 "type": "ALL"
             },
-            "deepTumour.filteredVcFile": {
+            "deepTumour.filtered_vcf": {
+                "contents": [
+                    {
+                        "outputDirectory": "@SCRATCH@/@DATE@_Workflow_deepTumour_test_vcf_@JENKINSID@"
+                    }
+                ],
+                "type": "ALL"
+            },
+            "deepTumour.snp_count_after_filter": {
                 "contents": [
                     {
                         "outputDirectory": "@SCRATCH@/@DATE@_Workflow_deepTumour_test_vcf_@JENKINSID@"
